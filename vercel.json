@@ -1,0 +1,10 @@
+{
+  "buildCommand": "npm --prefix mobile ci && npm --prefix mobile run export:web",
+  "outputDirectory": "mobile/dist",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}

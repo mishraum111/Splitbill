@@ -1,6 +1,14 @@
 # SplitBill
 
-A simple Android app for shared bills. Add a bill or transfer, see everyone’s signed balance, and settle up. Adults can sign in with Google; younger users have a separate on-device ledger. Split bills and keep the trip simple. No itinerary or subscription.
+A simple Android and web app for shared bills. Add a bill or transfer, see everyone’s signed balance, and settle up. Adults can sign in with Google; younger users have a separate on-device ledger. Split bills and keep the trip simple. No itinerary or subscription.
+
+## Live Web App & APK Download
+
+- **Live Web App (Vercel + Supabase):** [https://splitbill-web-neon.vercel.app](https://splitbill-web-neon.vercel.app)
+- **ARM64 APK (most modern Android phones):** [SplitBill-1.3.3-arm64-v8a.apk](https://github.com/DIVYANSH-675/splitly/releases/download/v1.3.3/SplitBill-1.3.3-arm64-v8a.apk)
+- **32-bit ARM APK (older devices):** [SplitBill-1.3.3-armeabi-v7a.apk](https://github.com/DIVYANSH-675/splitly/releases/download/v1.3.3/SplitBill-1.3.3-armeabi-v7a.apk)
+
+<img src="docs/splitbill-apk-qr.png" width="200" alt="Scan to download SplitBill v1.3.3 ARM64 APK">
 
 ## Android app
 
