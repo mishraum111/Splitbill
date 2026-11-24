@@ -1,7 +1,11 @@
 {
-  "buildCommand": "npm --prefix mobile ci && npm --prefix mobile run export:web",
+  "buildCommand": "npm --prefix mobile ci && EXPO_PUBLIC_API_URL=https://splitbill-web-neon.vercel.app npm --prefix mobile run export:web",
   "outputDirectory": "mobile/dist",
   "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "https://vckhsjdvymigndlqemyy.supabase.co/functions/v1/splitbill-api/api/$1"
+    },
     {
       "source": "/(.*)",
       "destination": "/index.html"
