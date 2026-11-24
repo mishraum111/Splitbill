@@ -1,0 +1,96 @@
+import React, { useState } from 'react';
+import { Pressable, View } from 'react-native';
+import { Text } from './Typography';
+import { router } from 'expo-router';
+import { useApp } from '../lib/context';
+import { currencies, type Trip } from '../lib/types';
+import { Btn, Chip, ErrorBox, Field, Sheet, s } from './ui';
+export function GroupForm({ onClose, trip }: { onClose: () => void; trip?: Trip }) {
+  const { user, updateTrip, mutate, mode } = useApp();
+  const [name, setName] = useState(trip?.name || ''),
+    [currency, setCurrency] = useState(trip?.currency || 'INR'),
+    [showCurrency, setShowCurrency] = useState(false),
+    [guests, setGuests] = useState(''),
+    [busy, setBusy] = useState(false),
+    [error, setError] = useState('');
+  const submit = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      const people = guests
+        .split(',')
+        .map((value) => value.trim())
+        .filter(Boolean);
+      const usernames = people
+        .filter((value) => value.startsWith('@'))
+        .map((value) => value.slice(1).toLowerCase());
+      if (people.length > 30) throw new Error('Add up to 30 people when creating a group.');
+      if (usernames.some((value) => !/^[a-z0-9_]{3,24}$/.test(value)))
+        throw new Error('Use @ followed by a valid username.');
+      if (new Set(usernames).size !== usernames.length)
+        throw new Error('Each username should appear only once.');
+      if (usernames.includes(user?.username || ''))
+        throw new Error('You are included automatically. Remove your own @username.');
+      const data = (await mutate(trip ? `/trips/${trip.id}` : '/trips', trip ? 'PATCH' : 'POST', {
+        name,
+        currency,
+        guests: people,
+      })) as Trip;
+      updateTrip(data);
+      onClose();
+      if (!trip) router.push({ pathname: '/group/[id]', params: { id: data.id } });
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Sheet visible title={trip ? 'Group name' : 'New group'} onClose={onClose}>
+      <Field
+        label="Group name"
+        value={name}
+        onChangeText={setName}
+        placeholder="e.g. Flatmates"
+        maxLength={80}
+      />
+      {!trip && (
+        <>
+          <Field
+            label={mode !== 'child' ? 'Names or @usernames (optional)' : 'Names on this device (optional)'}
+            value={guests}
+            onChangeText={setGuests}
+            placeholder={mode === 'online' ? 'Jigyasu, @aarav_27, Priya' : mode === 'demo' ? 'Jigyasu, @aarav, Priya' : 'Family, Friend'}
+          />
+          <Text style={s.muted}>
+            {mode === 'online' ? 'Separate people with commas. Names create unclaimed guests; @usernames add existing accounts automatically after syncing. Username lookup needs Internet.' : mode === 'demo' ? 'Use comma-separated names or sample usernames @aarav, @priya and @rohan. Sample accounts are simulated on this device; nobody is contacted.' : 'Separate names with commas. These labels stay on this device; they do not invite or contact anyone.'}
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Change group currency"
+            onPress={() => setShowCurrency((v) => !v)}
+          >
+            <Text style={s.link}>Currency: {currency} · Change</Text>
+          </Pressable>
+          {showCurrency && (
+            <View style={s.wrap}>
+              {Object.keys(currencies).map((c) => (
+                <Chip
+                  key={c}
+                  title={c}
+                  active={c === currency}
+                  onPress={() => {
+                    setCurrency(c);
+                    setShowCurrency(false);
+                  }}
+                />
+              ))}
+            </View>
+          )}
+        </>
+      )}
+      <ErrorBox text={error} />
+      <Btn title={trip ? 'Save changes' : 'Create group'} busy={busy} onPress={submit} />
+    </Sheet>
+  );
+}

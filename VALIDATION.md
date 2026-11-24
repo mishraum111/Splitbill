@@ -1,0 +1,110 @@
+# Validation — SplitBill 1.3.3 (2026-11-05)
+
+- 51 automated tests pass, including persistent local ledgers, transfers excluded from expense totals, date edits, category persistence, serialized saves, failed-storage rollback, snapshot isolation and remote-field stripping.
+- The actual API transport is compiled into the tests: local mode routes requests locally, rejects uncovered upload/auth/download paths, makes zero fetch calls and preserves existing adult credentials. Exiting restores the normal transport. A delayed cloud-outbox write is rejected in local mode, remains queued and resumes against the preserved adult account after local mode exits; it never becomes a local group.
+- Parent-control tests cover adulthood date boundaries, invalid dates, salted PIN hashing, failed-attempt lockout persisted across restarts and no plain PIN retention. Browser QA inspected the parent setup form without creating a credential.
+- Browser QA on a fresh origin verified the neutral age screen, under-9 refusal, adult demo entry, sample bill save, correct totals and shares, full activity page, reset back to the original ledger and exit back to welcome. No external HTTP requests were observed in those flows. A render refresh loop found during QA was fixed; no new browser warnings/errors followed the fix.
+- Extended browser QA saved an edited name and locally resized photo, claimed a sample guest with its INR +4,500 balance, picked a synthetic PDF, saved it on a new bill and opened its receipt action. Reset restored Alex, the original three bills and one group. No external HTTP requests were observed during those operations. The only captured warning was the expected Metro disconnect while restarting the development server.
+- Extended-demo tests cover receipt upload/download and file-type/size validation, local profile photos, synthetic username lookup, claim-preserved balances, join-as-new zero balance and author/admin permissions. Base64 round trips include a 2 MB boundary file; remote photos and real invite codes are rejected. Sample QR codes use the normal 12-character hexadecimal scanner format; friendly DEMOCLAIM/DEMONEW aliases resolve to the same group without duplicate joins. A format mismatch found before publication was corrected; superseded native builds were canceled.
+- Demo PDF and XLSX tests cover current edited ledger values, numeric shares and safe literal spreadsheet labels. Both rendered PDF pages were visually inspected. The in-app browser did not expose the blob download event; native file sharing remains unverified.
+- Production Android/Hermes export passes (3.8 MB JavaScript bundle, not the installed/download size). The final compiled client is `ce1ae3e`, including the mode-switch queue guard and QR compatibility fix. Superseded incomplete candidates were canceled before publishing.
+- Expo introspection and the actual AAB confirm backup disabled, all nine data domains excluded from legacy/cloud backup and device transfer, and cleartext traffic disabled. The packaged XML resources were decoded and checked.
+- Physical-device parent PIN interaction, local storage restart, native SDK network traffic before/after the age screen, camera/date picker/sharing and Google return remain unverified. No blanket Families-policy or legal-compliance certification is claimed.
+
+# Validation — SplitBill
+
+## 1.3.3 APK artifacts
+
+- [Android workflow 42034703228](https://github.com/DIVYANSH-675/splitly/actions/runs/42034703228) completed both ABI jobs successfully from client commit `ce1ae3ef6b0e46afac3bfca1a36f61af922454f2`. Both APKs pass ZIP integrity, package/version (1.3.3/code 11), min SDK 24, target SDK 36, correct single ABI, disabled backup and latest-client string checks.
+- Both APK v2 signatures match the existing preview certificate (`fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c`). All 28 ARM64 ELF libraries have at least 16 KiB load alignment, and all 28 stored native entries are ZIP-aligned to 16 KiB. No advertising-ID, overlay, microphone or broad media/storage permission is present.
+- ARM64: 37,534,667 bytes; SHA-256 `8bf0d2b48e36e317c4419205f013321b435c01f36ed37ab7316e229d0b2395d6`.
+- ARMv7: 28,538,871 bytes; SHA-256 `3d6dde7afd137668de82a179179360fe983af959c6e106451d45845c871c985a`.
+- Android/Hermes export also passes for this final client. Physical-phone installation, native SDK traffic and interaction remain unverified. The compiled APK bundles also contain the final QR compatibility fix.
+
+## 1.3.3 Play bundle and publication
+
+- Production EAS build `e18c222b-57e7-4640-967a-db6e53b7f4ef` finished from client `ce1ae3ef6b0e46afac3bfca1a36f61af922454f2`. Bundletool, ZIP integrity, JAR signature and matching upload-certificate checks pass. Package is `com.divyansh.splitly`, version 1.3.3/code 11, min SDK 24 and target SDK 36. All 56 packaged 64-bit ELF libraries have at least 16 KiB load alignment. No advertising-ID or overlay permission is present, and the final client strings are in the actual Hermes bundle.
+- AAB: 80,167,104 bytes; SHA-256 `59779795f25646b96dd818cf1dee8f3248fb2b4f6000461c3d6b653870c2b1bb`. The upload certificate remains `E4:19:51:7B:CC:75:25:9B:63:4A:CE:E4:5C:FA:5A:00:E0:18:7F:63:19:97:CE:04:A4:C6:21:0D:23:04:63:A0`.
+- Play release 3 is Active and Available to internal testers. Selected tester accounts are unchanged. Play estimates 16.8 MB for new installs and 1.72 MB for updates, with no supported-device losses. Propagation can take an hour or longer. This is not a public production release.
+- Both APKs, the AAB, source ZIP and SHA256SUMS are published on the public v1.3.3 GitHub prerelease. Unauthenticated release/API and download checks returned HTTP 200; GitHub asset digests match the local binaries. Tag/source archive `bda99de` contains documentation-only changes after the compiled client; current status documentation is maintained on main without rewriting the tag.
+- Public privacy/deletion pages are updated. Reviewer-demo instructions, no-advertising-ID declaration and the revised store description are saved in Play, ready for review. Dashboard setup is 8/11 complete. Content rating awaits IARC legal approval; ages 9–12 remain disabled until rating completion, and final Data safety follows Target audience. Tester-list/country choices, physical-device acceptance and the 12-testers/14-days closed test remain outstanding. No closed test or production submission has occurred.
+
+## 1.3.2 Google return fix (2026-11-05)
+
+- 43 automated tests pass, including native return ordering, cancellation followed by a delayed link, process-restart recovery, and rejected state/expired proofs. TypeScript and ESLint pass.
+- A live native sign-in is owned by the browser-session handler. Expo Router ignores that same warm callback instead of mounting another auth screen; cold and delayed callbacks retain their recovery route and use the current callback parameters.
+- Android Custom Tabs use the app task instead of a separate proxy task. Home shows a progress indicator during token exchange; a temporary group-fetch failure after successful authentication no longer reports sign-in failure.
+- PKCE, state, API binding, ten-minute expiry, Google account permissions and secure token storage remain enforced. No production auth configuration or database changes were needed.
+- EAS production build `db82cc9e-e3b0-43a9-8dc7-9b76765ef32f` finished from client commit `8ecbf8d`. Bundletool, ZIP integrity, JAR signature, matching upload certificate, package/version/SDK, HTTPS/no-overlay checks and all 56 packaged 64-bit ELF alignment checks pass. A unique string from the latest client is present in the actual Hermes bundle.
+- Version 1.3.2 (10) is published and Available to internal testers on the existing track; selected tester accounts remain unchanged. Play estimates 16.8 MB for new installs and 1.67 MB for updates. Store propagation can take an hour or occasionally longer. Physical-phone OAuth return/Back behavior is not yet verified; automated lifecycle tests do not substitute for a phone test.
+- The live API health and Google configuration endpoints return HTTP 200. The superseded initial build was canceled before publication to include visible error handling in the final client.
+- AAB: 80,136,171 bytes; SHA-256 `a31845864efd54d91455ff62ea849a8fa703a9beb94cbd0c55ad4bf58705ea05`. This is the multi-architecture upload, not the Play download size.
+
+## 1.3.1 Play internal test (2026-11-04)
+
+- All 39 tests pass; TypeScript and ESLint pass. Date coverage includes leap days, invalid dates, local calendar conversion in Asia/Kolkata, America/Los_Angeles and Pacific/Kiritimati, API add/edit/reload, audit before/after values, and unchanged balances. Offline tests preserve the selected date after restart, correction and replay.
+- Browser test used a disposable local in-memory database. A bill saved with 30 Oct 2026 appeared under that heading; editing to 29 Oct survived opening the payer selector, saving and a full page reload. No production expenses were changed.
+- Production EAS build `9bd2057a-da24-49bf-afa4-e19dc07af399` completed from client commit `cec90ec`. Signed bundle `com.divyansh.splitly`, version 1.3.1, code 9, min SDK 24 and target SDK 36 passed bundletool validation, ZIP integrity and JAR signature verification. All 56 packaged 64-bit ELF libraries have load-segment alignment of at least 16 KiB. Cleartext traffic is disabled and the unused overlay permission is excluded. Native date-picker interaction and Google OAuth return on a physical Android device remain unverified.
+- Google Play draft app created in Divyansh007 / developerg675@gmail.com after explicit approval of the developer-policy and export declarations. Build 9 is published and Active on the internal-testing track, with the developer email as the sole selected tester. The opt-in link displays the expected invitation under that Google account. Play estimates 16.8 MB for new installs. This is not a public production release; Play requires a closed test with at least 12 opted-in testers for 14 continuous days before the account can apply for production access.
+- Public privacy and deletion-request pages are live, profile/sign-in support links are included, and the owner approved manual deletion requests via developerg email with a target of 30 days after ownership verification. Google OAuth branding now points to these pages and its audience status is In production. Store metadata, icon, graphic and two actual UI captures are saved. The icon and feature graphic are AI-labelled; screenshots are unaltered browser renders with synthetic data, not Android-device captures.
+- Data safety answers for all 11 selected data types are prepared as a draft. Final submission is blocked by Target audience, which is blocked by reusable reviewer sign-in details. No main Google-account password has been shared with reviewers. The reviewer-login/demo-mode choice is pending. The IARC contact/category are prepared, with its separate Terms of Use left unchecked pending owner approval.
+
+- AAB: 80,134,650 bytes; SHA-256 `8760416b5ace8403b49f713f527018d5ab99b99e395d08612bb0480645cc5cd0`. This multi-architecture upload size is not the per-device Play download size.
+
+# Validation — SplitBill 1.3.0 preview
+
+- Google-only welcome screen; backup-email and manual name/username signup removed.
+- Verified Google profile initializes name/photo and a unique default handle up to eight characters. Users may edit these later; returning sign-in retains those edits.
+- PKCE/state/API/redirect/expiry validation and server-side verified-provider checks are covered by local tests. Linked legacy identities retain group ownership, and a Google identity cannot be connected to two app users.
+- Production registration/password/email routes are disabled. Historical database records are preserved.
+- Local checks: 36 tests passed, TypeScript passed and ESLint passed. Browser inspection confirms the Google-only welcome screen and editable Profile with no backup-email section.
+- Live database: the Google identity migration was applied successfully; RLS is enabled, anonymous/authenticated table access is denied, and the app runtime role has its intended access. Supabase Advisor reports no security issues.
+- Google Cloud project `splitbill-512207` was created. Consent configuration and the OAuth web client are created after user approval. The Google provider is enabled with the correct client ID; Android and local web callback URLs are saved. The Google backend is deployed, and `/api/google/config` returns HTTP 200. The user corrected the Google-generated client secret. A real browser Google sign-in now completes successfully and opens the authenticated SplitBill home and Profile with the Google name and connected email. Sign-out followed by a second Google login also passed. The generated username is eight characters (`deve8122`).
+- Android workflow [39389907164](https://github.com/DIVYANSH-675/splitly/actions/runs/39389907164) builds source `f74694e`; both Android jobs completed successfully. Both APKs passed ZIP integrity, package/version (1.3.0, code 5), ABI, bundled Google UI and cloud URL checks, and Android v2 signature verification. The certificate matches 1.2.1 for in-place preview updates. Live browser Google sign-in passed against the deployed backend. Physical-device Android OAuth return behavior remains unverified.
+
+- ARM64 APK: 36,870,789 bytes; SHA-256 `951db3f4a458ed5b82b5939db58a44bf91f8dba9fd7c9c6aa7b1e1fa0252df34`.
+- ARMv7 APK: 27,891,377 bytes; SHA-256 `32ba2e797d453d35ce2033112a006c56bd4ce6d07311bf740541a7d6e238297b`.
+
+# Validation — SplitBill 1.2.1
+
+- Source build: `71c450187d8e88dc47dbd5af3eb0d27b599cfe39`; [Android workflow 39383552995](https://github.com/DIVYANSH-675/splitly/actions/runs/39383552995).
+- Transactions use one date section per recorded calendar day; bills and transfers for that day are shown together. Grouping tests cover mixed types, day ordering, stable legacy ordering, invalid/missing dates, and no mutation of ledger data. Browser checks confirm one 24 Oct 2026 heading above all four demo bills and a separate 20 Oct section for the transfer, with no repeated dates on cards.
+- Updated bill and transfer forms have side-by-side From/To cards. Member selection uses a dedicated picker; bill splits support equal, exact amounts, shares and percentages. Done stays visible while the list scrolls.
+- Browser checks at 320- and 390-pixel widths: cards fit side by side; selections and form values persist after Done; exact amounts/percentages validate; multiple payer amounts and rounding are preserved; transfer participants can be changed. No demo ledger entries were saved during these checks.
+- Committed source passed 33 API/finance/offline tests, TypeScript and ESLint. Both Android CI jobs passed their source checks and native builds.
+- Both standalone APKs passed ZIP integrity, Android v2 signature verification, package/version checks (`com.divyansh.splitly`, version 1.2.1, Android code 4), expected single ABI, hosted API and updated picker bundle-string checks. Signing certificate matches 1.2.0 for compatible in-place preview upgrades.
+- ARM64: 36,843,242 bytes; SHA-256 `a60e5c2f6de0529ab849db181242c746cd24cbab9236fb7dd029bd053526e2da`.
+- ARMv7: 27,863,830 bytes; SHA-256 `eb5a8fc43c3ca46ac8314e8b76398fb5014eb6ed9cd76c4d170c600ed2c018da`.
+- Browser membership checks also passed: a synthetic Jigyasu Patel account claimed Jigyasu and kept the INR 600 balance; the member list showed the profile name and username; a group created through the comma-separated input became visible in the @username-invited account.
+- Membership integration and live-cloud checks passed: @username users see groups without a manual join; unknown/duplicate usernames are rejected; claims rename the same member while preserving bills, transfers and balances; an existing linked account cannot be claimed; new joins start with a separate balance; author/admin edit restrictions are retained. Connected names follow profile updates. No database schema changes were required.
+- The APKs contain the client at the build commit; subsequent release-documentation edits do not change the client.
+- Physical-device installation and native camera/picker/share behavior remain unverified. Backup-email delivery still requires the SMTP setup documented in the README. Cloud schema was unchanged. The matching server update was deployed; only synthetic QA groups were created or changed during verification.
+
+# Previous release — SplitBill 1.2.0
+
+## Completed
+
+- Node API/finance/offline tests: 29 passing. Includes exact integer splits, transfers outside expense totals, creator/admin rights, full audit diffs, durable queue restart/concurrency/failure behavior, offline group/transfer/category projection, stable IDs, duplicate-safe writes/deletes, private attachment validation/access, persistent custom categories and unique usernames. Caller-generated IDs cannot overwrite another group, duplicate entry IDs are rejected, and request replay rechecks current membership.
+- Backup email: injected-provider integration test proves that an unverified email cannot recover an account; wrong/reused codes fail; another user cannot claim a linked email; successful email-code login restores the same user ID and group/admin rights. No real email or code is printed or included in source.
+- Mobile TypeScript and ESLint passed after feature changes.
+- Expo web and Android/Hermes exports passed. Android bundle was about 3.6 MB before final packaging; this is not the APK size.
+- Dedicated free Supabase organization and project created under the requested developer account. Project `gomowueeizpwzzbqugod` is in Singapore. Eight private app tables were created through the dashboard; the final eight-table check returned RLS=true and anonymous SELECT=false for every table.
+- Live cloud API smoke test passed: usernames, group join/access denial, shared category, private PDF upload, idempotent bill replay, peer edit denial, transfer excluded from spending, PDF and XLSX exports.
+- Supabase Security Advisor reported zero errors and zero warnings. After the restricted server-role migration, rerunning Security Advisor reported zero errors, zero warnings and zero informational notices. Runtime role checks confirmed it cannot read Supabase Auth users or create schema objects; full live CRUD/export checks passed under that role.
+- Live exported PDF rendered and inspected: correct date/time, dynamic member shares, totals, settlements, transfers and graph. Notification history is absent. XLSX contains numeric financial data and audit details.
+- Browser with the cloud API blocked: created a group, added a custom category, attached a PDF, saved a bill and transfer, reloaded. All four pending changes and the attachment remained. After unblocking, exactly one bill and transfer appeared; total was INR 240, each share INR 120, and payer balance INR +150 (including a separate INR 30 transfer).
+- Browser profile photo selection, resize, save and reload passed; the test photo was then removed. Full-page notifications and same-page analytics passed visual/DOM checks. Group invite QR is generated; camera scanning needs a device check.
+
+## Delivery limits
+
+- Backup-email code delivery requires a custom SMTP provider, confirmed sender, OTP email templates and `SPLITBILL_EMAIL_OTP_READY=true`. The free default service cannot customize the sign-in-link template. The server currently returns an explicit setup error instead of pretending to send a usable code. Real email delivery/recovery is not yet verified.
+- Physical-device camera scanning, Android picker/share sheets, profile picker and a cold start without Internet still require device acceptance testing. Browser offline testing validates state/queue behavior, not those native integrations.
+- Android workflow [39323964316](https://github.com/DIVYANSH-675/splitly/actions/runs/39323964316) built both APKs from client commit `2eec97d`. Later commits change server code, migrations and documentation; mobile source is identical.
+- ARM64 APK: 36,835,382 bytes (35.13 MiB), SHA-256 `c728203183230961cbe752529f9b4656ba0809f43967a87402195f8deccc621f`.
+- ARMv7 APK: 27,855,970 bytes (26.57 MiB), SHA-256 `0599f38a40f1307473ecd76cbf456902906823e10765dfc4d2ddec8789624b9c`.
+- Both passed APK ZIP integrity, Android v2 signature verification, package/version checks (`com.divyansh.splitly`, 1.2.0, code 3), Android 7+ minimum, expected single ABI, visible SplitBill name and embedded hosted API checks. No microphone or broad photo/storage permission is declared. Signing uses the same preview debug certificate on both.
+- Physical-device installation and native hardware behavior remain unverified.
+- Background sync/push, account recovery without a verified email, Play Store submission, production signing, SMTP provider and operational backups are not configured. Sync runs while the app is open.
+- Existing local SQLite data is preserved. All five existing groups, five user identities and six hashed sessions were migrated to the private cloud database. The live browser preview was switched to the cloud API; subsequent local-only SQLite edits remain separate.
+- Preview packages retain the Android identifier `com.divyansh.splitly` and legacy storage keys to preserve upgrades. The visible app name is SplitBill.
+- Attachment data uses database quota. The API serves small groups with serialized database transactions; it is not load-tested at public-service scale.

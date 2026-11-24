@@ -1,0 +1,159 @@
+import React, { useState } from 'react';
+import { ScrollView, View } from 'react-native';
+import { Text } from '../components/Typography';
+import { router } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
+import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
+import { useApp } from '../lib/context';
+import type { User } from '../lib/types';
+import { Avatar, BottomNav, Btn, C, ErrorBox, Field, Icon, Logo, Page, s } from '../components/ui';
+import { PaperArt } from '../components/FinanceCards';
+import Auth from './Auth';
+import { version } from '../../package.json';
+import { GoogleSignIn } from '../components/GoogleSignIn';
+import { SupportLinks } from '../components/SupportLinks';
+export default function Profile() {
+  const { user, setUser, signOut, mutate, mode, manageAge } = useApp();
+  const [name, setName] = useState<string | null>(null),
+    [username, setUsername] = useState<string | null>(null),
+    [photo, setPhoto] = useState<string | null>(null),
+    [busy, setBusy] = useState(false),
+    [error, setError] = useState(''),
+    [saved, setSaved] = useState(false);
+  if (!user) return <Auth />;
+  return (
+    <Page>
+      <ScrollView
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ padding: 25, gap: 26 }}
+      >
+        <Logo small />
+        <View style={{ alignItems: 'center', paddingVertical: 10, gap: 12 }}>
+          <Text style={[s.eyebrow, { marginBottom: 9 }]}>YOUR LITTLE CORNER</Text>
+          <Avatar photo={photo ?? user.photo} name={user.name} size={82} />
+          {mode !== 'child' && <Btn
+            title="Change profile photo"
+            secondary
+            onPress={async () => {
+              try {
+                const picked = await ImagePicker.launchImageLibraryAsync({
+                  mediaTypes: ['images'],
+                  allowsEditing: true,
+                  aspect: [1, 1],
+                  quality: 0.7,
+                });
+                if (picked.canceled) return;
+                const result = await ImageManipulator.manipulate(picked.assets[0].uri)
+                  .resize({ width: 192 })
+                  .renderAsync();
+                const file = await result.saveAsync({
+                  format: SaveFormat.JPEG,
+                  compress: 0.65,
+                  base64: true,
+                });
+                setPhoto(`data:image/jpeg;base64,${file.base64}`);
+                setSaved(false);
+              } catch (e) {
+                setError((e as Error).message);
+              }
+            }}
+          />}
+          {mode !== 'child' && Boolean(photo ?? user.photo) && (
+            <Btn title="Remove photo" secondary onPress={() => setPhoto('')} />
+          )}
+          <Text style={s.h2}>{user.name}</Text>
+          <Text style={s.muted}>{user.googleEmail || user.email || 'Good company starts with you.'}</Text>
+        </View>
+        <View style={[s.card, { padding: 22, gap: 23 }]}>
+          <Field
+            label="What we call you"
+            value={name ?? user.name}
+            onChangeText={(v) => {
+              setName(v);
+              setSaved(false);
+            }}
+            maxLength={60}
+            placeholder="Your name"
+          />
+          {mode !== 'child' && <Field
+            label="Unique username"
+            value={username ?? user.username ?? ''}
+            onChangeText={(value) => { setUsername(value); setSaved(false); }}
+            autoCapitalize="none"
+            autoCorrect={false}
+            maxLength={24}
+            placeholder="your_username"
+          />}
+          <ErrorBox text={error} />
+          <Btn
+            title={saved ? 'Looking good. Saved ✓' : 'Save profile'}
+            busy={busy}
+            onPress={async () => {
+              setBusy(true);
+              setError('');
+              try {
+                setUser(
+                  (await mutate('/me', 'PATCH', {
+                    name: name ?? user.name,
+                    username: username ?? user.username,
+                    photo: photo ?? user.photo,
+                  })) as User,
+                );
+                setSaved(true);
+              } catch (e) {
+                setError((e as Error).message);
+              } finally {
+                setBusy(false);
+              }
+            }}
+          />
+        </View>
+        <Text style={s.eyebrow}>SETTINGS</Text>
+        {mode === 'online' && <GoogleSignIn link disabled={busy}/>}
+        {mode === 'online' && user.guest && !user.googleEmail && (
+          <View style={[s.row, { alignItems: 'flex-start', gap: 13, paddingHorizontal: 4 }]}>
+            <Icon name="phone-portrait-outline" size={20} color={C.muted} />
+            <View style={{ flex: 1, gap: 5 }}>
+              <Text style={{ color: C.dark, fontSize: 12, fontWeight: '700' }}>
+                A familiar face, on this device.
+              </Text>
+              <Text style={s.muted}>
+                Connect Google above before changing phones or reinstalling. Your existing groups and balances will stay with this account.
+              </Text>
+            </View>
+          </View>
+        )}
+        {mode === 'online' && Boolean(user.googleEmail) && (
+          <Btn
+            title="Sign out"
+            secondary
+            busy={busy}
+            onPress={async () => {
+              setBusy(true);
+              try {
+                await signOut();
+                router.replace('/');
+              } catch (e) {
+                setError((e as Error).message);
+              } finally {
+                setBusy(false);
+              }
+            }}
+          />
+        )}
+        <Btn title={mode === 'child' ? 'Parent settings' : 'Device age settings'} secondary onPress={manageAge} />
+        {mode !== 'child' ? <SupportLinks /> : <Text style={s.muted}>Your groups, names and bills are saved only on this device. There is no Google account, photo upload, Internet sharing or cloud backup. Uninstalling or clearing app data removes the local ledger. Parent settings need the PIN created during setup.</Text>}
+        <View
+          style={{ alignItems: 'center', transform: [{ scale: 0.7 }], height: 128, marginTop: 5 }}
+        >
+          <PaperArt />
+        </View>
+        <Text style={{ fontSize: 10, textAlign: 'center', color: '#94A085' }}>
+          SplitBill {version} · Less money talk. More of the good stuff.
+        </Text>
+      </ScrollView>
+      <BottomNav active="Profile" />
+    </Page>
+  );
+}

@@ -1,0 +1,415 @@
+import React, { useState } from 'react';
+import { Pressable, View } from 'react-native';
+import { Text } from './Typography';
+import { pickAttachment } from '../lib/attachments';
+import { api } from '../lib/api';
+import { useApp } from '../lib/context';
+import { categoryInfo, expenseCategories } from '../lib/categories';
+import {
+  inputMoney,
+  localDate,
+  money,
+  type Attachment,
+  type BillInput,
+  type PendingBill,
+  type Expense,
+  type Trip,
+} from '../lib/types';
+import { Btn, C, Chip, ErrorBox, Field, Icon, Sheet, s } from './ui';
+import { PeopleCard } from './PeoplePicker';
+import { BillPeoplePicker } from './BillPeoplePicker';
+import { ReceiptScannerSheet, type ReceiptScanResult } from './ai/ReceiptScannerSheet';
+import { AnomalyBanner, type AnomalyReport } from './ai/AnomalyBanner';
+import { expenseFromInput, minor } from '../lib/finance.mjs';
+import { ExpenseDateField } from './ExpenseDateField';
+import { isCalendarDate } from '../lib/expense-date.mjs';
+
+export function ExpenseForm({
+  trip,
+  expense,
+  draft,
+  onClose,
+  onSaved,
+}: {
+  trip: Trip;
+  expense?: Expense;
+  draft?: PendingBill;
+  onClose: () => void;
+  onSaved: (t: Trip) => void;
+}) {
+  const { addBill, mutate, mode: accessMode } = useApp();
+  const [attachments, setAttachments] = useState<Attachment[]>(
+    expense?.attachments || draft?.body.attachments || [],
+  );
+  const [newCategory, setNewCategory] = useState('');
+  const [date, setDate] = useState(expense?.date ?? draft?.body.date ?? localDate());
+  const [picking, setPicking] = useState<'payers' | 'shares' | null>(null);
+  const currency = expense?.currency || draft?.body.currency || trip.currency;
+  const [amount, setAmount] = useState(
+      expense ? inputMoney(expense.originalAmount, currency) : draft?.body.amount || '',
+    ),
+    [title, setTitle] = useState(expense?.title || draft?.body.title || ''),
+    [category, setCategory] = useState(expense?.category || draft?.body.category || 'Other'),
+    [choosingCategory, setChoosingCategory] = useState(false),
+    [mode, setMode] = useState(expense?.mode || draft?.body.mode || 'equal'),
+    [error, setError] = useState(''),
+    [busy, setBusy] = useState(false);
+  const [scanningReceipt, setScanningReceipt] = useState(false);
+  const [receiptAnalysis, setReceiptAnalysis] = useState<ReceiptScanResult | null>(null);
+  const [anomalyReport, setAnomalyReport] = useState<AnomalyReport | null>(null);
+
+  const [selected, setSelected] = useState(
+      expense?.shares.map((s) => s.memberId) ||
+        draft?.body.shares.map((s) => s.memberId) ||
+        trip.members.map((m) => m.id),
+    ),
+    [payers, setPayers] = useState(
+      expense?.payers.map((p) => p.memberId) ||
+        draft?.body.payers.map((p) => p.memberId) || [trip.me],
+    ),
+    [values, setValues] = useState<Record<string, string>>(
+      Object.fromEntries(
+        expense?.shares.map((s) => [s.memberId, String(s.value)]) ||
+          draft?.body.shares.map((s) => [s.memberId, s.value]) ||
+          [],
+      ),
+    ),
+    [paid, setPaid] = useState<Record<string, string>>(
+      Object.fromEntries(
+        expense?.payers.map((p) => [p.memberId, inputMoney(p.originalAmount, currency)]) ||
+          draft?.body.payers.map((p) => [p.memberId, p.amount]) ||
+          [],
+      ),
+    );
+
+  const buildPayload = (): BillInput => {
+    if (!isCalendarDate(date)) throw new Error('Choose a valid expense date.');
+    const body: BillInput = {
+      title,
+      attachments,
+      amount,
+      currency,
+      rate: expense?.rate || draft?.body.rate || 1,
+      date,
+      category,
+      note: expense?.note || draft?.body.note || '',
+      mode,
+      shares: selected.map((memberId) => ({ memberId, value: values[memberId] || '0' })),
+      payers: payers.map((memberId) => ({ memberId, amount: paid[memberId] || '0' })),
+    };
+    expenseFromInput(body, trip);
+    return body;
+  };
+
+  const commitSave = async (body: BillInput) => {
+    if (expense)
+      onSaved((await mutate(`/trips/${trip.id}/expenses/${expense.id}`, 'PATCH', body)) as Trip);
+    else await addBill(trip.id, body, draft?.id);
+    onClose();
+  };
+
+  const submit = async (skipAnomalyCheck = false) => {
+    setBusy(true);
+    setError('');
+    try {
+      const body = buildPayload();
+      if (!skipAnomalyCheck && accessMode === 'online') {
+        try {
+          const check = await api<AnomalyReport>(`/trips/${trip.id}/ai/check-anomalies`, 'POST', {
+            expense: { ...body, id: expense?.id },
+            receiptAnalysis,
+          });
+          if (check.flagged) {
+            setAnomalyReport(check);
+            setBusy(false);
+            return;
+          }
+        } catch {
+          // Allow saving offline or if anomaly service is unreachable
+        }
+      }
+      await commitSave(body);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const categoryVisual = categoryInfo(category);
+  let totalMinor = 0;
+  try {
+    totalMinor = minor(amount, currency);
+  } catch {
+    /* Amount is still being entered. */
+  }
+  const each =
+    selected.length && totalMinor ? money(Math.floor(totalMinor / selected.length), currency) : '';
+
+  if (scanningReceipt) {
+    return (
+      <ReceiptScannerSheet
+        trip={trip}
+        isDemo={accessMode === 'demo'}
+        onClose={() => setScanningReceipt(false)}
+        onApply={(extracted) => {
+          setTitle(extracted.title);
+          setAmount(extracted.amount);
+          setDate(extracted.date);
+          setCategory(extracted.category);
+          setMode(extracted.mode);
+          setSelected(extracted.shares.map((s) => s.memberId));
+          setValues(Object.fromEntries(extracted.shares.map((s) => [s.memberId, s.value])));
+          setReceiptAnalysis(extracted.receiptAnalysis);
+          setAnomalyReport(null);
+          if (extracted.attachment) {
+            setAttachments((prev) => [extracted.attachment!, ...prev].slice(0, 3));
+          }
+        }}
+      />
+    );
+  }
+
+  if (picking)
+    return (
+      <BillPeoplePicker
+        key={picking}
+        trip={trip}
+        kind={picking}
+        amount={totalMinor}
+        currency={currency}
+        selected={picking === 'payers' ? payers : selected}
+        values={picking === 'payers' ? paid : values}
+        mode={picking === 'payers' ? 'exact' : mode}
+        onBack={() => setPicking(null)}
+        onDone={(ids, entries, nextMode) => {
+          if (picking === 'payers') {
+            setPayers(ids);
+            setPaid(entries);
+          } else {
+            setSelected(ids);
+            setValues(entries);
+            setMode(nextMode);
+          }
+          setPicking(null);
+        }}
+      />
+    );
+
+  return (
+    <Sheet visible title={expense || draft ? 'Edit bill' : 'Add a bill'} onClose={onClose}>
+      {accessMode !== 'child' && (
+        <Btn
+          title="AI Scan Receipt or PDF"
+          icon="scan-outline"
+          secondary
+          onPress={() => {
+            setError('');
+            setScanningReceipt(true);
+          }}
+        />
+      )}
+      <Field
+        label={`Amount (${currency})`}
+        value={amount}
+        onChangeText={(v) => {
+          setAmount(v);
+          setAnomalyReport(null);
+        }}
+        keyboardType="decimal-pad"
+        placeholder="0.00"
+        style={{
+          fontSize: 45,
+          lineHeight: 60,
+          minHeight: 91,
+          paddingVertical: 8,
+          fontFamily: 'ManropeBold',
+          letterSpacing: -1.7,
+        }}
+      />
+      <Field
+        label="What was it for?"
+        value={title}
+        onChangeText={(v) => {
+          setTitle(v);
+          setAnomalyReport(null);
+        }}
+        placeholder="e.g. Dinner"
+        maxLength={120}
+      />
+      <View style={{ gap: 12 }}>
+        <ExpenseDateField
+          value={date}
+          onChange={(d) => {
+            setDate(d);
+            setAnomalyReport(null);
+          }}
+        />
+        <View style={{ flexDirection: 'row', gap: 12, alignItems: 'stretch' }}>
+          <PeopleCard
+            label="From"
+            caption="Paid by"
+            members={trip.members.filter((member) => payers.includes(member.id))}
+            summary={payers.length > 1 ? 'Multiple people paid' : 'Who paid the bill'}
+            onPress={() => setPicking('payers')}
+          />
+          <PeopleCard
+            label="To"
+            caption="Paid for"
+            members={trip.members.filter((member) => selected.includes(member.id))}
+            summary={
+              mode === 'equal'
+                ? `Equal split · ${selected.length} people`
+                : mode === 'exact'
+                  ? 'Custom amounts'
+                  : mode === 'percent'
+                    ? 'Split by percent'
+                    : 'Split by shares'
+            }
+            onPress={() => setPicking('shares')}
+          />
+        </View>
+        {mode === 'equal' && Boolean(each) && (
+          <Text style={{ fontSize: 12, color: C.accent, fontWeight: '600' }}>
+            {totalMinor % selected.length ? 'About ' : ''}
+            {each} each · tap To to change shares
+          </Text>
+        )}
+      </View>
+      <View style={{ gap: 10 }}>
+        <Text style={s.label}>Category</Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Category: ${categoryVisual.label}`}
+          accessibilityState={{ expanded: choosingCategory }}
+          onPress={() => setChoosingCategory((v) => !v)}
+          style={[
+            s.between,
+            {
+              backgroundColor: C.white,
+              borderWidth: 1,
+              borderColor: C.line,
+              borderRadius: 18,
+              padding: 14,
+            },
+          ]}
+        >
+          <View style={s.row}>
+            <Icon name={categoryVisual.icon} color={categoryVisual.color} size={20} />
+            <Text style={{ color: C.dark, fontSize: 13, fontWeight: '600' }}>
+              {categoryVisual.label}
+            </Text>
+          </View>
+          <Icon name={choosingCategory ? 'chevron-up' : 'chevron-down'} size={16} color={C.muted} />
+        </Pressable>
+        {choosingCategory && (
+          <View style={s.wrap}>
+            {[
+              ...expenseCategories,
+              ...(trip.categories || [])
+                .filter((c) => !expenseCategories.some((v) => v.value === c))
+                .map((c) => ({ value: c, label: c })),
+            ].map((item) => (
+              <Chip
+                key={item.value}
+                title={item.label}
+                active={category === item.value}
+                onPress={() => {
+                  setCategory(item.value);
+                  setChoosingCategory(false);
+                }}
+              />
+            ))}
+          </View>
+        )}
+        {choosingCategory && (
+          <View style={{ gap: 10 }}>
+            <Field
+              label="New group category"
+              value={newCategory}
+              onChangeText={setNewCategory}
+              placeholder="e.g. Camping"
+              maxLength={40}
+            />
+            <Btn
+              title="Add group category"
+              secondary
+              onPress={async () => {
+                if (!newCategory.trim()) return;
+                try {
+                  await mutate(`/trips/${trip.id}/categories`, 'POST', {
+                    name: newCategory.trim(),
+                  });
+                  setCategory(newCategory.trim());
+                  setChoosingCategory(false);
+                } catch (e) {
+                  setError((e as Error).message);
+                }
+              }}
+            />
+            <Text style={s.muted}>
+              {accessMode === 'online'
+                ? 'Available to everyone in this group after syncing.'
+                : 'Saved in this local group.'}
+            </Text>
+          </View>
+        )}
+      </View>
+      {accessMode !== 'child' && (
+        <View style={{ gap: 12 }}>
+          <Text style={s.label}>Attachments · optional</Text>
+          {attachments.map((file) => (
+            <View key={file.id} style={s.between}>
+              <Text style={[s.muted, { flex: 1 }]} numberOfLines={1}>
+                {file.name}
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Remove ${file.name}`}
+                onPress={() => setAttachments((prev) => prev.filter((a) => a.id !== file.id))}
+              >
+                <Text style={{ color: C.red }}>Remove</Text>
+              </Pressable>
+            </View>
+          ))}
+          {attachments.length < 3 && (
+            <Btn
+              title="Attach receipt or file"
+              icon="attach-outline"
+              secondary
+              onPress={async () => {
+                try {
+                  const file = await pickAttachment(accessMode === 'demo');
+                  if (file) setAttachments((prev) => [...prev, file].slice(0, 3));
+                } catch (e) {
+                  setError((e as Error).message);
+                }
+              }}
+            />
+          )}
+          <Text style={s.muted}>
+            {accessMode === 'demo'
+              ? 'JPG, PNG, WebP or PDF · up to 2 MB each. Kept in this demo; never uploaded. Use sample files only.'
+              : 'JPG, PNG, WebP or PDF · up to 2 MB each. Saved on your device until synced.'}
+          </Text>
+        </View>
+      )}
+      <AnomalyBanner
+        report={anomalyReport}
+        onDismiss={() => setAnomalyReport(null)}
+        onProceed={() => void submit(true)}
+      />
+      <ErrorBox text={error} />
+      {!expense && (
+        <Text style={s.muted}>
+          {accessMode === 'online'
+            ? 'Saved on this device first. Syncs automatically when your server is reachable.'
+            : accessMode === 'demo'
+              ? 'Sample changes stay in this demo and clear when you exit.'
+              : 'Saved only on this device. No Internet connection or account is used.'}
+        </Text>
+      )}
+      <Btn title="Save bill" busy={busy} onPress={() => void submit(false)} />
+    </Sheet>
+  );
+}
